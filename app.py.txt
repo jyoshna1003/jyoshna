@@ -1,0 +1,90 @@
+from flask import Flask, render_template, request
+import os
+import cv2
+import requests
+
+app = Flask(_name_)
+
+# Make folders if they don't exist
+os.makedirs("uploads", exist_ok=True)
+os.makedirs("static/generated", exist_ok=True)
+
+# Hugging Face API info
+API_URL = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0"
+API_KEY = "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"   # Replace with your Hugging Face API key
+HEADERS = {"Authorization": f"Bearer {API_KEY}"}
+
+# Function to generate AI outfit image
+def generate_image(prompt, filename):
+    response = requests.post(
+        API_URL,
+        headers=HEADERS,
+        json={"inputs": prompt}
+    )
+    image_path = f"static/generated/{filename}.png"
+    with open(image_path, "wb") as f:
+        f.write(response.content)
+    return image_path
+
+# Welcome page
+@app.route("/")
+def welcome():
+    return render_template("welcome.html")
+
+# Main user input page
+@app.route("/home")
+def home():
+    return render_template("index.html")
+
+# Form submission and outfit generation
+@app.route("/generate", methods=["POST"])
+def generate():
+    gender = request.form['gender']
+    body_type = request.form['body_type']
+    color = request.form['color']
+    occasion = request.form['occasion']
+
+    # Save uploaded image
+    file = request.files['image']
+    file_path = os.path.join("uploads", file.filename)
+    file.save(file_path)
+
+    # Skin tone detection
+    image = cv2.imread(file_path)
+    avg_color = image.mean(axis=0).mean(axis=0)
+    r, g, b = avg_color
+
+    if r > 170:
+        skin_tone = "fair"
+        outfit_colors = ["navy blue", "emerald green", "deep red"]
+    elif r > 120:
+        skin_tone = "medium"
+        outfit_colors = ["royal blue", "maroon", "mustard"]
+    else:
+        skin_tone = "dark"
+        outfit_colors = ["white", "bright yellow", "light blue"]
+
+    # Gender-based accessories and jewellery
+    if gender.lower() == "male":
+        accessories = ["Classic Watch", "Leather Belt", "Formal Shoes", "Sunglasses"]
+        jewellery = ["Silver cufflinks", "Gold chain", "Platinum ring"]
+    else:
+        accessories = ["Elegant Handbag", "Heels", "Statement Earrings", "Bracelet"]
+        jewellery = ["Gold necklace", "Silver earrings", "Platinum bracelet"]
+
+    # Generate 3 AI outfit images
+    generated_images = []
+for i, outfit_color in enumerate(outfit_colors):
+        prompt = f"A fashionable {gender} model with {skin_tone} skin tone wearing a {outfit_color} outfit suitable for {occasion}, styled for a {body_type} body type, professional fashion photography"
+        image_path = generate_image(prompt, f"outfit{i}")
+        generated_images.append(image_path)
+
+    return render_template(
+        "index.html",
+        outfits=generated_images,
+        accessories=accessories,
+        jewellery=jewellery
+    )
+
+if _name_ == "_main_":
+    app.run(debug=True)
